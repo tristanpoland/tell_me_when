@@ -175,7 +175,10 @@ impl EventHandler for FileSystemHandler {
         }
 
         self.config = config;
-        self.platform_watcher = Some(PlatformWatcher::new()?);
+        self.platform_watcher = Some(PlatformWatcher::new(
+            self.handler_id.clone(),
+            self.event_sender.clone()
+        )?);
         self.is_running = true;
 
         log::info!("FileSystem handler started with id: {}", self.handler_id);

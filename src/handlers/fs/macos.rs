@@ -10,6 +10,8 @@ use std::ptr;
 use crate::handlers::fs::{FsWatchConfig, WatchHandle};
 use crate::events::FsEventType;
 use crate::{Result, TellMeWhenError};
+use crossbeam_channel::Sender;
+use crate::{EventMessage, EventData, EventMetadata};
 
 #[derive(Debug)]
 pub struct MacOsWatchHandle {
@@ -20,6 +22,8 @@ pub struct MacOsWatchHandle {
 
 pub struct PlatformWatcher {
     active_streams: Vec<FSEventStreamRef>,
+    event_sender: Option<Sender<EventMessage>>,
+    handler_id: String,
 }
 
 unsafe impl Send for PlatformWatcher {}
@@ -90,9 +94,11 @@ const kFSEventStreamEventFlagItemChangeOwner: u32 = 0x00004000;
 const kFSEventStreamEventFlagItemXattrMod: u32 = 0x00008000;
 
 impl PlatformWatcher {
-    pub fn new() -> Result<Self> {
+    pub fn new(handler_id: String, event_sender: Option<Sender<EventMessage>>) -> Result<Self> {
         Ok(Self {
             active_streams: Vec::new(),
+            event_sender,
+            handler_id,
         })
     }
 

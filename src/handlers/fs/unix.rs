@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use crate::handlers::fs::{FsWatchConfig, WatchHandle};
 use crate::events::FsEventType;
 use crate::{Result, TellMeWhenError};
+use crossbeam_channel::Sender;
+use crate::{EventMessage, EventData, EventMetadata};
 
 #[derive(Debug)]
 pub struct UnixWatchHandle {
@@ -15,6 +17,8 @@ pub struct UnixWatchHandle {
 pub struct PlatformWatcher {
     inotify: Inotify,
     watches: HashMap<i32, PathBuf>,
+    event_sender: Option<Sender<EventMessage>>,
+    handler_id: String,
 }
 
 unsafe impl Send for PlatformWatcher {}
@@ -24,13 +28,15 @@ unsafe impl Send for UnixWatchHandle {}
 unsafe impl Sync for UnixWatchHandle {}
 
 impl PlatformWatcher {
-    pub fn new() -> Result<Self> {
+    pub fn new(handler_id: String, event_sender: Option<Sender<EventMessage>>) -> Result<Self> {
         let inotify = Inotify::init()
             .map_err(|e| TellMeWhenError::System(format!("Failed to initialize inotify: {}", e)))?;
 
         Ok(Self {
             inotify,
             watches: HashMap::new(),
+            event_sender,
+            handler_id,
         })
     }
 
