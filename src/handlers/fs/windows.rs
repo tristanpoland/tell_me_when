@@ -7,25 +7,34 @@ use winapi::um::{
         FILE_NOTIFY_CHANGE_ATTRIBUTES, FILE_NOTIFY_CHANGE_CREATION, FILE_NOTIFY_CHANGE_DIR_NAME,
         FILE_NOTIFY_CHANGE_FILE_NAME, FILE_NOTIFY_CHANGE_LAST_WRITE, FILE_NOTIFY_CHANGE_SIZE,
         FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, HANDLE,
+        FILE_ACTION_ADDED, FILE_ACTION_REMOVED, FILE_ACTION_MODIFIED, FILE_ACTION_RENAMED_OLD_NAME,
+        FILE_ACTION_RENAMED_NEW_NAME,
     },
     synchapi::{CreateEventW, WaitForSingleObject},
     errhandlingapi::GetLastError,
 };
 use winapi::shared::winerror::ERROR_IO_PENDING;
-use winapi::um::minwinbase::OVERLAPPED;
+use winapi::um::minwinbase::{OVERLAPPED, FILE_NOTIFY_INFORMATION};
 use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
-use std::path::Path;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::path::{Path, PathBuf};
 use std::ptr;
+use std::mem;
 use crate::handlers::fs::{FsWatchConfig, WatchHandle};
-use crate::events::FsEventType;
+use crate::events::{FsEventData, FsEventType};
 use crate::{Result, TellMeWhenError};
+use crossbeam_channel::Sender;
+use crate::{EventMessage, EventData, EventMetadata};
+use std::time::SystemTime;
 
 pub struct WindowsWatchHandle {
     directory_handle: HANDLE,
     event_handle: HANDLE,
     buffer: Vec<u8>,
     overlapped: Box<OVERLAPPED>,
+    watched_path: PathBuf,
+    event_sender: Option<Sender<EventMessage>>,
+    handler_id: String,
 }
 
 impl std::fmt::Debug for WindowsWatchHandle {
@@ -40,6 +49,8 @@ impl std::fmt::Debug for WindowsWatchHandle {
 
 pub struct PlatformWatcher {
     handles: Vec<WindowsWatchHandle>,
+    event_sender: Option<Sender<EventMessage>>,
+    handler_id: String,
 }
 
 unsafe impl Send for PlatformWatcher {}
@@ -49,9 +60,11 @@ unsafe impl Send for WindowsWatchHandle {}
 unsafe impl Sync for WindowsWatchHandle {}
 
 impl PlatformWatcher {
-    pub fn new() -> Result<Self> {
+    pub fn new(handler_id: String, event_sender: Option<Sender<EventMessage>>) -> Result<Self> {
         Ok(Self {
             handles: Vec::new(),
+            event_sender,
+            handler_id,
         })
     }
 
@@ -91,15 +104,21 @@ impl PlatformWatcher {
 
             let buffer = vec![0u8; 4096];
 
-            let watch_handle = WindowsWatchHandle {
+            let mut watch_handle = WindowsWatchHandle {
                 directory_handle,
                 event_handle,
                 buffer,
                 overlapped,
+                watched_path: path.to_path_buf(),
+                event_sender: self.event_sender.clone(),
+                handler_id: self.handler_id.clone(),
             };
 
-            // Start monitoring
-            self.start_monitoring(&watch_handle, config)?;
+            // Start initial monitoring call
+            self.start_monitoring(&mut watch_handle, config)?;
+
+            // Start the monitoring task
+            self.start_monitoring_task(&watch_handle, config.clone()).await;
 
             let handle = WatchHandle {
                 handle: watch_handle,

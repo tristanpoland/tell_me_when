@@ -59,9 +59,10 @@ async fn test_multiple_event_types_simultaneously() {
     let activity_start = Instant::now();
     
     // File system activity
+    let temp_path_clone = temp_path.to_path_buf();
     let fs_task = tokio::spawn(async move {
         for i in 0..5 {
-            let test_file = temp_path.join(format!("test_file_{}.txt", i));
+            let test_file = temp_path_clone.join(format!("test_file_{}.txt", i));
             if let Err(e) = fs::write(&test_file, format!("Content for file {}", i)) {
                 eprintln!("Failed to write file {}: {}", i, e);
             }
