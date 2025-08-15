@@ -14,43 +14,35 @@ async fn test_file_creation_event() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path();
     
-    let events_received = Arc::new(Mutex::new(Vec::new()));
-    let events_clone = events_received.clone();
+    // Use a channel to receive the callback without polling
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+    let tx_clone = tx.clone();
     
-    // Set up file creation event listener
+    // Set up file creation event listener that signals when event is received
     let _id = event_system.on_fs_created(temp_path, move |event: FsEventData| {
-        let mut events = events_clone.lock().unwrap();
-        events.push(event);
+        println!("File creation event received: {:?}", event);
+        if let Some(sender) = tx_clone.lock().unwrap().take() {
+            let _ = sender.send(event);
+        }
     }).await.expect("Failed to set up fs created event listener");
     
-    // Give the system time to set up the watcher
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    
-    // Create a test file
+    // Create a test file - OS callback should trigger instantly
     let test_file = temp_path.join("test_creation.txt");
     fs::write(&test_file, "Hello, World!").expect("Failed to write test file");
     
-    // Wait for the event to be processed
-    let result = timeout(Duration::from_secs(10), async {
-        loop {
-            {
-                let events = events_received.lock().unwrap();
-                if !events.is_empty() {
-                    break;
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait for the callback (no polling, pure async wait with timeout)
+    let result = timeout(Duration::from_secs(10), rx).await;
+    
+    match result {
+        Ok(Ok(event)) => {
+            assert_eq!(event.event_type, FsEventType::Created);
+            assert!(event.path.to_string_lossy().contains("test_creation.txt"));
+            println!("✅ File creation test passed - OS callback triggered instantly");
         }
-    }).await;
-    
-    assert!(result.is_ok(), "Timeout waiting for file creation event");
-    
-    let events = events_received.lock().unwrap();
-    assert!(!events.is_empty(), "No file creation events received");
-    
-    let first_event = &events[0];
-    assert_eq!(first_event.event_type, FsEventType::Created);
-    assert!(first_event.path.to_string_lossy().contains("test_creation.txt"));
+        Ok(Err(_)) => panic!("Callback channel closed unexpectedly"),
+        Err(_) => panic!("⏰ Timeout: OS callback did not trigger within 10 seconds"),
+    }
     
     event_system.stop().await.expect("Failed to stop event system");
 }
@@ -63,32 +55,24 @@ async fn test_file_modification_event() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path();
     
-    let events_received = Arc::new(Mutex::new(Vec::new()));
-    let events_clone = events_received.clone();
-    
-    // Set up file modification event listener
-    let _id = event_system.on_fs_modified(temp_path, move |event: FsEventData| {
-        let mut events = events_clone.lock().unwrap();
-        events.push(event);
-    }).await.expect("Failed to set up fs modified event listener");
-    
-    // Give the system time to set up the watcher
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    
-    // Create initial file
+    // Create initial file first
     let test_file = temp_path.join("test_modification.txt");
     fs::write(&test_file, "Initial content").expect("Failed to write initial file");
     
-    // Give time for creation event to settle
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // Use a channel to receive the modification callback without polling
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+    let tx_clone = tx.clone();
     
-    // Clear any creation events
-    {
-        let mut events = events_received.lock().unwrap();
-        events.clear();
-    }
+    // Set up file modification event listener that signals when event is received
+    let _id = event_system.on_fs_modified(temp_path, move |event: FsEventData| {
+        println!("File modification event received: {:?}", event);
+        if let Some(sender) = tx_clone.lock().unwrap().take() {
+            let _ = sender.send(event);
+        }
+    }).await.expect("Failed to set up fs modified event listener");
     
-    // Modify the file
+    // Modify the file - OS callback should trigger instantly
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .append(true)
@@ -99,27 +83,18 @@ async fn test_file_modification_event() {
     file.flush().expect("Failed to flush file");
     drop(file); // Ensure file is closed
     
-    // Wait for the modification event
-    let result = timeout(Duration::from_secs(10), async {
-        loop {
-            {
-                let events = events_received.lock().unwrap();
-                if !events.is_empty() {
-                    break;
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait for the callback (no polling, pure async wait with timeout)
+    let result = timeout(Duration::from_secs(10), rx).await;
+    
+    match result {
+        Ok(Ok(event)) => {
+            assert_eq!(event.event_type, FsEventType::Modified);
+            assert!(event.path.to_string_lossy().contains("test_modification.txt"));
+            println!("✅ File modification test passed - OS callback triggered instantly");
         }
-    }).await;
-    
-    assert!(result.is_ok(), "Timeout waiting for file modification event");
-    
-    let events = events_received.lock().unwrap();
-    assert!(!events.is_empty(), "No file modification events received");
-    
-    let first_event = &events[0];
-    assert_eq!(first_event.event_type, FsEventType::Modified);
-    assert!(first_event.path.to_string_lossy().contains("test_modification.txt"));
+        Ok(Err(_)) => panic!("Callback channel closed unexpectedly"),
+        Err(_) => panic!("⏰ Timeout: OS callback did not trigger within 10 seconds"),
+    }
     
     event_system.stop().await.expect("Failed to stop event system");
 }
@@ -132,56 +107,40 @@ async fn test_file_deletion_event() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path();
     
-    let events_received = Arc::new(Mutex::new(Vec::new()));
-    let events_clone = events_received.clone();
-    
-    // Set up file deletion event listener
-    let _id = event_system.on_fs_deleted(temp_path, move |event: FsEventData| {
-        let mut events = events_clone.lock().unwrap();
-        events.push(event);
-    }).await.expect("Failed to set up fs deleted event listener");
-    
-    // Give the system time to set up the watcher
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    
     // Create a test file first
     let test_file = temp_path.join("test_deletion.txt");
     fs::write(&test_file, "File to be deleted").expect("Failed to write test file");
     
-    // Give time for creation to complete
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // Use a channel to receive the deletion callback without polling
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+    let tx_clone = tx.clone();
     
-    // Delete the file
+    // Set up file deletion event listener that signals when event is received
+    let _id = event_system.on_fs_deleted(temp_path, move |event: FsEventData| {
+        println!("File deletion event received: {:?}", event);
+        if event.event_type == FsEventType::Deleted {
+            if let Some(sender) = tx_clone.lock().unwrap().take() {
+                let _ = sender.send(event);
+            }
+        }
+    }).await.expect("Failed to set up fs deleted event listener");
+    
+    // Delete the file - OS callback should trigger instantly
     fs::remove_file(&test_file).expect("Failed to delete test file");
     
-    // Wait for the deletion event
-    let result = timeout(Duration::from_secs(10), async {
-        loop {
-            {
-                let events = events_received.lock().unwrap();
-                for event in events.iter() {
-                    if event.event_type == FsEventType::Deleted {
-                        return;
-                    }
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait for the callback (no polling, pure async wait with timeout)
+    let result = timeout(Duration::from_secs(10), rx).await;
+    
+    match result {
+        Ok(Ok(event)) => {
+            assert_eq!(event.event_type, FsEventType::Deleted);
+            assert!(event.path.to_string_lossy().contains("test_deletion.txt"));
+            println!("✅ File deletion test passed - OS callback triggered instantly");
         }
-    }).await;
-    
-    assert!(result.is_ok(), "Timeout waiting for file deletion event");
-    
-    let events = events_received.lock().unwrap();
-    let deletion_events: Vec<_> = events.iter()
-        .filter(|e| e.event_type == FsEventType::Deleted)
-        .collect();
-    
-    assert!(!deletion_events.is_empty(), "No file deletion events received");
-    
-    let first_deletion = deletion_events[0];
-    assert!(first_deletion.path.to_string_lossy().contains("test_deletion.txt"));
-    
-    event_system.stop().await.expect("Failed to stop event system");
+        Ok(Err(_)) => panic!("Callback channel closed unexpectedly"),
+        Err(_) => panic!("⏰ Timeout: OS callback did not trigger within 10 seconds"),
+    }
 }
 
 #[tokio::test]
