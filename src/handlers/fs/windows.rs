@@ -128,7 +128,7 @@ impl PlatformWatcher {
         }
     }
 
-    fn start_monitoring(&self, watch_handle: &WindowsWatchHandle, config: &FsWatchConfig) -> Result<()> {
+    fn start_monitoring(&self, watch_handle: &mut WindowsWatchHandle, config: &FsWatchConfig) -> Result<()> {
         unsafe {
             let notify_filter = self.build_notify_filter(&config.event_types);
             let mut bytes_returned = 0u32;
