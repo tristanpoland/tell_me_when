@@ -1,0 +1,42 @@
+[package]
+name = "tell_me_when"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tristan Poland (Trident_For_U)"]
+description = "Callback based cross-platform event system for FS updates and OS events"
+license = "MIT"
+repository = "https://github.com/tristanpoland/tell_me_when"
+keywords = ["events", "filesystem", "watcher", "cross-platform", "callbacks"]
+categories = ["filesystem", "os"]
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+crossbeam-channel = "0.5"
+sysinfo = "0.30"
+log = "0.4"
+async-trait = "0.1"
+futures = "0.3"
+thiserror = "1.0"
+regex = "1.10"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winnt", "fileapi", "handleapi", "synchapi", "winbase", "winerror", "errhandlingapi"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+inotify = "0.10"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+core-foundation-sys = "0.8"
+
+[dev-dependencies]
+tempfile = "3.8"
+tokio-test = "0.4"
+env_logger = "0.11"
+num_cpus = "1.16"
+reqwest = { version = "0.11", features = ["json"] }
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
