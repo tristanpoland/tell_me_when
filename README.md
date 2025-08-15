@@ -1,4 +1,4 @@
-# Tell Me When 🚀
+# Tell Me When
 
 A Rust library for cross-platform event monitoring and callback-based notifications. Monitor file system changes, process events, system resource usage, network changes, and power events with simple, intuitive APIs.
 
