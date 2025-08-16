@@ -11,13 +11,12 @@ use winapi::um::{
         FILE_ACTION_ADDED, FILE_ACTION_REMOVED, FILE_ACTION_MODIFIED, FILE_ACTION_RENAMED_OLD_NAME,
         FILE_ACTION_RENAMED_NEW_NAME,
     },
-    synchapi::{CreateEventW, WaitForSingleObject},
+    synchapi::{CreateEventW, WaitForSingleObject, SleepEx},
     errhandlingapi::GetLastError,
+    minwinbase::{OVERLAPPED, LPOVERLAPPED_COMPLETION_ROUTINE},
 };
-use winapi::shared::winerror::ERROR_IO_PENDING;
-use winapi::um::minwinbase::OVERLAPPED;
+use winapi::shared::winerror::{ERROR_IO_PENDING, ERROR_SUCCESS};
 use winapi::um::winnt::FILE_NOTIFY_INFORMATION;
-use winapi::um::synchapi::SleepEx;
 use std::ffi::OsStr;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
@@ -74,19 +73,42 @@ struct CallbackContext {
     config: FsWatchConfig,
 }
 
+// Helper function to send the event message
+fn send_event(sender: &Sender<EventMessage>, handler_id: &str, event_data: FsEventData) {
+    let message = EventMessage {
+        metadata: EventMetadata {
+            id: 0,
+            handler_id: handler_id.to_string(),
+            timestamp: SystemTime::now(),
+            source: "filesystem".to_string(),
+        },
+        data: EventData::FileSystem(event_data),
+    };
+    if let Err(e) = sender.send(message) {
+        log::error!("Failed to send filesystem event: {}", e);
+    }
+}
+
 // Windows completion routine called directly by the OS when filesystem events occur
 extern "system" fn filesystem_completion_routine(
-    _error_code: u32,
+    error_code: u32,
     bytes_transferred: u32,
     overlapped: *mut OVERLAPPED,
 ) {
     unsafe {
-        if overlapped.is_null() {
+        // Recover the context from the hEvent member of the OVERLAPPED structure
+        let context_ptr = (*overlapped).hEvent as *mut CallbackContext;
+        if context_ptr.is_null() {
+            log::error!("Completion routine called with null context pointer.");
             return;
         }
+        let context = &mut *context_ptr;
 
-        // Get the context from the overlapped structure
-        let context = &*((*overlapped).hEvent as *const CallbackContext);
+        if error_code != ERROR_SUCCESS && error_code != ERROR_IO_PENDING {
+            log::error!("Filesystem monitoring stopped due to error: {}", error_code);
+            let _ = Box::from_raw(context_ptr);
+            return;
+        }
         
         if bytes_transferred > 0 {
             let buffer_slice = std::slice::from_raw_parts(context.buffer, bytes_transferred as usize);
@@ -99,15 +121,9 @@ extern "system" fn filesystem_completion_routine(
         }
 
         // Restart monitoring for next batch of events
-        let notify_filter = FILE_NOTIFY_CHANGE_FILE_NAME
-            | FILE_NOTIFY_CHANGE_DIR_NAME
-            | FILE_NOTIFY_CHANGE_LAST_WRITE
-            | FILE_NOTIFY_CHANGE_CREATION
-            | FILE_NOTIFY_CHANGE_SIZE
-            | FILE_NOTIFY_CHANGE_ATTRIBUTES;
-
+        let notify_filter = PlatformWatcher::build_notify_filter_static(&context.config.event_types);
         let mut new_overlapped = std::mem::zeroed::<OVERLAPPED>();
-        new_overlapped.hEvent = context as *const _ as *mut c_void;
+        new_overlapped.hEvent = context_ptr as *mut c_void;
         let mut bytes_returned = 0u32;
 
         let success = ReadDirectoryChangesW(
@@ -125,6 +141,7 @@ extern "system" fn filesystem_completion_routine(
             let error = GetLastError();
             if error != ERROR_IO_PENDING {
                 log::error!("Failed to restart ReadDirectoryChangesW in callback: {}", error);
+                let _ = Box::from_raw(context_ptr);
             }
         }
     }
@@ -137,6 +154,13 @@ impl PlatformWatcher {
             event_sender,
             handler_id,
         })
+    }
+
+    pub fn run(&self) {
+        log::info!("Windows watcher is now running and waiting for events...");
+        unsafe {
+            SleepEx(winapi::um::winbase::INFINITE, 1);
+        }
     }
 
     pub async fn watch_path(&mut self, path: &Path, config: &FsWatchConfig) -> Result<WatchHandle> {
@@ -158,35 +182,39 @@ impl PlatformWatcher {
 
             if directory_handle == INVALID_HANDLE_VALUE {
                 return Err(TellMeWhenError::System(
-                    "Failed to open directory for watching".to_string(),
+                    format!("Failed to open directory for watching: {}", GetLastError()),
                 ));
             }
 
-            let event_handle = CreateEventW(ptr::null_mut(), 0, 0, ptr::null());
-            if event_handle.is_null() {
-                CloseHandle(directory_handle);
-                return Err(TellMeWhenError::System(
-                    "Failed to create event handle".to_string(),
-                ));
-            }
+            let event_handle = ptr::null_mut(); 
 
-            let mut overlapped = Box::new(std::mem::zeroed::<OVERLAPPED>());
-            overlapped.hEvent = event_handle;
-
-            let buffer = vec![0u8; 4096];
+            let mut buffer = vec![0u8; 4096];
+            let buffer_ptr = buffer.as_mut_ptr();
+            let buffer_len = buffer.len();
 
             let mut watch_handle = WindowsWatchHandle {
                 directory_handle,
                 event_handle,
                 buffer,
-                overlapped,
+                overlapped: Box::new(std::mem::zeroed::<OVERLAPPED>()),
                 watched_path: path.to_path_buf(),
                 event_sender: self.event_sender.clone(),
                 handler_id: self.handler_id.clone(),
             };
 
-            // Start the monitoring task
-            self.start_monitoring_task(&watch_handle, config.clone()).await;
+            let context = Box::new(CallbackContext {
+                watched_path: watch_handle.watched_path.clone(),
+                event_sender: watch_handle.event_sender.clone(),
+                handler_id: watch_handle.handler_id.clone(),
+                directory_handle: watch_handle.directory_handle,
+                buffer: buffer_ptr,
+                buffer_len,
+                config: config.clone(),
+            });
+
+            watch_handle.overlapped.hEvent = Box::into_raw(context) as *mut c_void;
+
+            self.start_monitoring(&mut watch_handle, config).await;
 
             let handle = WatchHandle {
                 handle: watch_handle,
@@ -196,11 +224,11 @@ impl PlatformWatcher {
         }
     }
 
-    fn start_monitoring(&self, watch_handle: &mut WindowsWatchHandle, config: &FsWatchConfig) -> Result<()> {
+    async fn start_monitoring(&self, watch_handle: &mut WindowsWatchHandle, config: &FsWatchConfig) -> Result<()> {
+        let notify_filter = Self::build_notify_filter_static(&config.event_types);
+        let mut bytes_returned = 0u32;
+        
         unsafe {
-            let notify_filter = self.build_notify_filter(&config.event_types);
-            let mut bytes_returned = 0u32;
-
             let success = ReadDirectoryChangesW(
                 watch_handle.directory_handle,
                 watch_handle.buffer.as_ptr() as *mut _,
@@ -209,7 +237,7 @@ impl PlatformWatcher {
                 notify_filter,
                 &mut bytes_returned,
                 watch_handle.overlapped.as_ref() as *const _ as *mut _,
-                None,
+                Some(filesystem_completion_routine),
             );
 
             if success == 0 {
@@ -221,98 +249,53 @@ impl PlatformWatcher {
                 }
             }
         }
-
         Ok(())
     }
 
-    async fn start_monitoring_task(&self, watch_handle: &WindowsWatchHandle, config: FsWatchConfig) {
-        // Simplified approach: Use basic overlapped I/O with event signaling
-        let directory_handle_raw = watch_handle.directory_handle as usize;
-        let event_handle_raw = watch_handle.event_handle as usize;
-        let watched_path = watch_handle.watched_path.clone();
-        let event_sender = watch_handle.event_sender.clone();
-        let handler_id = watch_handle.handler_id.clone();
-        
-        std::thread::spawn(move || {
-            let directory_handle = directory_handle_raw as HANDLE;
-            let event_handle = event_handle_raw as HANDLE;
-            let mut buffer = vec![0u8; 4096];
-            
-            println!("Starting Windows filesystem monitoring for: {:?}", watched_path);
-            
-            loop {
-                unsafe {
-                    let mut overlapped = std::mem::zeroed::<OVERLAPPED>();
-                    overlapped.hEvent = event_handle;
-                    let mut bytes_returned = 0u32;
+    fn build_notify_filter_static(event_types: &[FsEventType]) -> u32 {
+        let mut filter = 0u32;
+
+        for event_type in event_types {
+            match event_type {
+                FsEventType::Created => {
+                    filter |= FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
+                }
+                FsEventType::Modified => {
+                    filter |= FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_ATTRIBUTES;
+                }
+                FsEventType::Deleted => {
+                    filter |= FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
+                }
+                FsEventType::AttributeChanged => {
+                    filter |= FILE_NOTIFY_CHANGE_ATTRIBUTES;
+                }
+                FsEventType::Renamed { .. } => {
+                    filter |= FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
+                }
+                _ => {
                     
-                    let notify_filter = FILE_NOTIFY_CHANGE_FILE_NAME
-                        | FILE_NOTIFY_CHANGE_DIR_NAME
-                        | FILE_NOTIFY_CHANGE_LAST_WRITE
-                        | FILE_NOTIFY_CHANGE_CREATION
-                        | FILE_NOTIFY_CHANGE_SIZE
-                        | FILE_NOTIFY_CHANGE_ATTRIBUTES;
-
-                    let success = ReadDirectoryChangesW(
-                        directory_handle,
-                        buffer.as_mut_ptr() as *mut _,
-                        buffer.len() as u32,
-                        if config.watch_subdirectories { 1 } else { 0 },
-                        notify_filter,
-                        &mut bytes_returned,
-                        &mut overlapped,
-                        None, // No completion routine, use event signaling
-                    );
-
-                    if success == 0 {
-                        let error = GetLastError();
-                        if error != ERROR_IO_PENDING {
-                            println!("ReadDirectoryChangesW failed with error: {}", error);
-                            break;
-                        }
-                    }
-
-                    // Wait for the event to be signaled (blocking until filesystem change)
-                    let wait_result = WaitForSingleObject(event_handle, 5000); // 5 second timeout
-                    if wait_result == 0 { // WAIT_OBJECT_0 = 0 - event signaled
-                        println!("Filesystem event detected, getting overlapped result...");
-                        
-                        // Use GetOverlappedResult to get the actual bytes returned
-                        let mut actual_bytes = 0u32;
-                        let overlapped_result = GetOverlappedResult(
-                            directory_handle,
-                            &mut overlapped,
-                            &mut actual_bytes,
-                            0 // Don't wait, we already waited above
-                        );
-                        
-                        if overlapped_result != 0 && actual_bytes > 0 {
-                            println!("Processing {} bytes of filesystem notifications", actual_bytes);
-                            Self::process_notifications(&buffer[..actual_bytes as usize], &watched_path, &event_sender, &handler_id);
-                        } else {
-                            let error = GetLastError();
-                            println!("GetOverlappedResult failed with error: {}", error);
-                        }
-                    } else if wait_result == 258 { // WAIT_TIMEOUT
-                        // Timeout occurred, continue the loop (this is normal)
-                        continue;
-                    } else {
-                        println!("WaitForSingleObject failed with result: {}", wait_result);
-                        break;
-                    }
                 }
             }
-            
-            println!("Windows filesystem monitoring thread ending for: {:?}", watched_path);
-        });
+        }
+
+        if filter == 0 {
+            filter = FILE_NOTIFY_CHANGE_FILE_NAME
+                | FILE_NOTIFY_CHANGE_DIR_NAME
+                | FILE_NOTIFY_CHANGE_LAST_WRITE
+                | FILE_NOTIFY_CHANGE_CREATION
+                | FILE_NOTIFY_CHANGE_SIZE
+                | FILE_NOTIFY_CHANGE_ATTRIBUTES;
+        }
+
+        filter
     }
 
     fn process_notifications(buffer: &[u8], base_path: &Path, event_sender: &Option<Sender<EventMessage>>, handler_id: &str) {
-        println!("Processing filesystem notifications, buffer size: {}", buffer.len());
+        log::debug!("Processing filesystem notifications, buffer size: {}", buffer.len());
         
         if let Some(sender) = event_sender {
             let mut offset = 0;
-            let mut event_count = 0;
+            let mut old_name_info: Option<(PathBuf, SystemTime)> = None;
             
             while offset < buffer.len() {
                 unsafe {
@@ -325,39 +308,48 @@ impl PlatformWatcher {
                         );
                         
                         let filename = std::ffi::OsString::from_wide(filename_slice);
-                        // Remove null terminators that Windows may include
                         let filename_str = filename.to_string_lossy().trim_end_matches('\0').to_string();
-                        let full_path = base_path.join(filename_str);
+                        let full_path = base_path.join(&filename_str);
+                        let timestamp = SystemTime::now();
                         
-                        let event_type = match info.Action {
-                            FILE_ACTION_ADDED => FsEventType::Created,
-                            FILE_ACTION_REMOVED => FsEventType::Deleted,
-                            FILE_ACTION_MODIFIED => FsEventType::Modified,
-                            FILE_ACTION_RENAMED_OLD_NAME => FsEventType::Deleted,
-                            FILE_ACTION_RENAMED_NEW_NAME => FsEventType::Created,
-                            _ => FsEventType::Modified,
-                        };
-                        
-                        println!("Sending event: {:?} for path: {:?}", event_type, full_path);
-                        
-                        let event_data = FsEventData {
-                            event_type,
-                            path: full_path,
-                            timestamp: SystemTime::now(),
-                        };
-
-                        let message = EventMessage {
-                            metadata: EventMetadata {
-                                id: 0, // Will be set by event bus
-                                handler_id: handler_id.to_string(),
-                                timestamp: SystemTime::now(),
-                                source: "filesystem".to_string(),
-                            },
-                            data: EventData::FileSystem(event_data),
-                        };
-                        match sender.send(message) {
-                            Ok(_) => println!("✅ Event sent successfully"),
-                            Err(e) => println!("❌ Failed to send filesystem event: {}", e),
+                        match info.Action {
+                            FILE_ACTION_ADDED => {
+                                let event_data = FsEventData { event_type: FsEventType::Created, path: full_path, timestamp };
+                                send_event(sender, handler_id, event_data);
+                            }
+                            FILE_ACTION_REMOVED => {
+                                let event_data = FsEventData { event_type: FsEventType::Deleted, path: full_path, timestamp };
+                                send_event(sender, handler_id, event_data);
+                            }
+                            FILE_ACTION_MODIFIED => {
+                                let event_data = FsEventData { event_type: FsEventType::Modified, path: full_path, timestamp };
+                                send_event(sender, handler_id, event_data);
+                            }
+                            FILE_ACTION_RENAMED_OLD_NAME => {
+                                old_name_info = Some((full_path, timestamp));
+                            }
+                            FILE_ACTION_RENAMED_NEW_NAME => {
+                                if let Some((old_path, old_time)) = old_name_info.take() {
+                                    let event_data = FsEventData {
+                                        event_type: FsEventType::Renamed { old_path, new_path: full_path.clone() },
+                                        path: full_path,
+                                        timestamp: old_time,
+                                    };
+                                    send_event(sender, handler_id, event_data);
+                                } else {
+                                    log::warn!("Received FILE_ACTION_RENAMED_NEW_NAME without a preceding old name.");
+                                    let event_data = FsEventData {
+                                        event_type: FsEventType::Created,
+                                        path: full_path,
+                                        timestamp,
+                                    };
+                                    send_event(sender, handler_id, event_data);
+                                }
+                            }
+                            _ => {
+                                let event_data = FsEventData { event_type: FsEventType::Modified, path: full_path, timestamp };
+                                send_event(sender, handler_id, event_data);
+                            }
                         }
                     }
                     
@@ -371,46 +363,24 @@ impl PlatformWatcher {
     }
 
     fn build_notify_filter(&self, event_types: &[FsEventType]) -> u32 {
-        let mut filter = 0u32;
-
-        for event_type in event_types {
-            match event_type {
-                FsEventType::Created => {
-                    filter |= FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
-                }
-                FsEventType::Modified => {
-                    filter |= FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE;
-                }
-                FsEventType::Deleted => {
-                    filter |= FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
-                }
-                FsEventType::AttributeChanged => {
-                    filter |= FILE_NOTIFY_CHANGE_ATTRIBUTES;
-                }
-                _ => {
-                    // For renamed/moved events, we need file name changes
-                    filter |= FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
-                }
-            }
-        }
-
-        if filter == 0 {
-            // Default to all changes if no specific types specified
-            filter = FILE_NOTIFY_CHANGE_FILE_NAME
-                | FILE_NOTIFY_CHANGE_DIR_NAME
-                | FILE_NOTIFY_CHANGE_LAST_WRITE
-                | FILE_NOTIFY_CHANGE_CREATION
-                | FILE_NOTIFY_CHANGE_SIZE
-                | FILE_NOTIFY_CHANGE_ATTRIBUTES;
-        }
-
-        filter
+        Self::build_notify_filter_static(event_types)
     }
 
     pub async fn unwatch(&mut self, handle: WatchHandle) -> Result<()> {
         unsafe {
-            CloseHandle(handle.handle.event_handle);
-            CloseHandle(handle.handle.directory_handle);
+            let _ = winapi::um::ioapiset::CancelIo(handle.handle.directory_handle);
+            
+            let context_ptr = handle.handle.overlapped.hEvent as *mut CallbackContext;
+            if !context_ptr.is_null() {
+                let _ = Box::from_raw(context_ptr);
+            }
+
+            if !handle.handle.event_handle.is_null() {
+                CloseHandle(handle.handle.event_handle);
+            }
+            if handle.handle.directory_handle != INVALID_HANDLE_VALUE {
+                CloseHandle(handle.handle.directory_handle);
+            }
         }
         Ok(())
     }
@@ -419,6 +389,13 @@ impl PlatformWatcher {
 impl Drop for WindowsWatchHandle {
     fn drop(&mut self) {
         unsafe {
+            let _ = winapi::um::ioapiset::CancelIo(self.directory_handle);
+            
+            let context_ptr = self.overlapped.hEvent as *mut CallbackContext;
+            if !context_ptr.is_null() {
+                let _ = Box::from_raw(context_ptr);
+            }
+
             if !self.event_handle.is_null() {
                 CloseHandle(self.event_handle);
             }
