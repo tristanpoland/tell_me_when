@@ -152,9 +152,8 @@ impl ProcessHandler {
     }
 }
 
-#[async_trait]
-impl EventHandler for ProcessHandler {
-    async fn start(&mut self, sender: Sender<EventMessage>, handler_id: HandlerId) -> Result<()> {
+impl ProcessHandler {
+    pub async fn start(&mut self, sender: Sender<EventMessage>, handler_id: HandlerId) -> Result<()> {
         {
             let mut is_running = self.is_running.lock().unwrap();
             if *is_running {
@@ -167,23 +166,10 @@ impl EventHandler for ProcessHandler {
         self.start_platform_specific(sender, handler_id).await
     }
 
-    async fn stop(&mut self) -> Result<()> {
+    pub async fn stop(&mut self) -> Result<()> {
         let mut is_running = self.is_running.lock().unwrap();
         *is_running = false;
         log::info!("Process monitoring stopped");
         Ok(())
-    }
-
-    fn get_config(&self) -> &dyn std::any::Any {
-        &self.config
-    }
-
-    fn set_config(&mut self, config: Box<dyn std::any::Any>) -> Result<()> {
-        if let Ok(process_config) = config.downcast::<ProcessConfig>() {
-            self.config = *process_config;
-            Ok(())
-        } else {
-            Err(TellMeWhenError::Config("Invalid config type for ProcessHandler".to_string()))
-        }
     }
 }
