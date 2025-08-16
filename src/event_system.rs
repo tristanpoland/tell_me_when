@@ -318,9 +318,9 @@ impl EventSystem {
 
     async fn ensure_process_handler(&mut self) -> Result<()> {
         if self.process_handler.is_none() {
-            let mut handler = ProcessHandler::new("process".to_string());
-            handler.event_sender = Some(self.event_bus.sender());
-            handler.start(Default::default()).await?;
+            use crate::handlers::process::ProcessConfig;
+            let mut handler = ProcessHandler::new(ProcessConfig::default());
+            handler.start(self.event_bus.sender(), "process".to_string()).await?;
             self.process_handler = Some(handler);
         }
         Ok(())
