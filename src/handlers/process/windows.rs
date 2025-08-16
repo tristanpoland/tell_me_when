@@ -45,15 +45,15 @@ fn start_wmi_process_monitoring(
     sender: Sender<EventMessage>,
     handler_id: HandlerId,
 ) -> Result<()> {
-    use wmi::{WMIConnection, Variant};
+    use wmi::{WMIConnection, COMLibrary, Variant};
     use std::collections::HashMap as WmiHashMap;
 
     log::info!("Starting WMI process event monitoring");
 
-    let wmi_con = WMIConnection::new(com::COMLibrary::new().map_err(|e| {
-        TellMeWhenError::RuntimeError(format!("Failed to initialize COM library: {}", e))
+    let wmi_con = WMIConnection::new(COMLibrary::new().map_err(|e| {
+        TellMeWhenError::System(format!("Failed to initialize COM library: {}", e))
     })?)
-    .map_err(|e| TellMeWhenError::RuntimeError(format!("Failed to create WMI connection: {}", e)))?;
+    .map_err(|e| TellMeWhenError::System(format!("Failed to create WMI connection: {}", e)))?;
 
     // Monitor process creation events
     if config.monitor_new_processes {
