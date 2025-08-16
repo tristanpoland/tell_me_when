@@ -22,11 +22,14 @@ env_logger = "0.11"
 colored = "2.0"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winnt", "fileapi", "handleapi", "synchapi", "winbase", "winerror", "errhandlingapi", "ioapiset"] }
+winapi = { version = "0.3", features = ["winnt", "fileapi", "handleapi", "synchapi", "winbase", "winerror", "errhandlingapi", "ioapiset", "tlhelp32", "processthreadsapi"] }
+wmi = "0.13"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 inotify = "0.10"
+netlink-sys = "0.8"
+rtnetlink = "0.13"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
