@@ -39,33 +39,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }).await?;
 
     // System resource events with thresholds
-    let _cpu_high_id = event_system.on_cpu_usage_high(75.0, |event: SystemEventData| {
-        if let Some(cpu_usage) = event.cpu_usage {
-            println!("🔥 High CPU usage detected: {:.1}%", cpu_usage);
-        }
-    }).await?;
+    // let _cpu_high_id = event_system.on_cpu_usage_high(75.0, |event: SystemEventData| {
+    //     if let Some(cpu_usage) = event.cpu_usage {
+    //         println!("🔥 High CPU usage detected: {:.1}%", cpu_usage);
+    //     }
+    // }).await?;
 
-    let _memory_high_id = event_system.on_memory_usage_high(80.0, |event: SystemEventData| {
-        if let Some(memory_usage) = event.memory_usage {
-            println!("💾 High memory usage detected: {:.1}%", memory_usage);
-        }
-    }).await?;
+    //let _memory_high_id = event_system.on_memory_usage_high(80.0, |event: SystemEventData| {
+    //    if let Some(memory_usage) = event.memory_usage {
+    //        println!("💾 High memory usage detected: {:.1}%", memory_usage);
+    //    }
+    //}).await?;
 
     // Network events
-    let _network_id = event_system.on_network_event(|event: NetworkEventData| {
-        match event.event_type {
-            tell_me_when::NetworkEventType::InterfaceUp => {
-                println!("🌐 Network interface up: {:?}", event.interface_name);
-            }
-            tell_me_when::NetworkEventType::InterfaceDown => {
-                println!("📡 Network interface down: {:?}", event.interface_name);
-            }
-            tell_me_when::NetworkEventType::TrafficThresholdReached => {
-                println!("🚀 High network traffic on: {:?}", event.interface_name);
-            }
-            _ => {}
-        }
-    }).await?;
+    // let _network_id = event_system.on_network_event(|event: NetworkEventData| {
+    //     match event.event_type {
+    //         tell_me_when::NetworkEventType::InterfaceUp => {
+    //             println!("🌐 Network interface up: {:?}", event.interface_name);
+    //         }
+    //         tell_me_when::NetworkEventType::InterfaceDown => {
+    //             println!("📡 Network interface down: {:?}", event.interface_name);
+    //         }
+    //         tell_me_when::NetworkEventType::TrafficThresholdReached => {
+    //             println!("🚀 High network traffic on: {:?}", event.interface_name);
+    //         }
+    //         _ => {}
+    //     }
+    // }).await?;
 
     // Power events
     let _battery_low_id = event_system.on_battery_low(25.0, |event: PowerEventData| {
@@ -148,23 +148,23 @@ async fn advanced_example() -> Result<(), Box<dyn std::error::Error>> {
     }).await?;
 
     // System health monitoring with custom thresholds
-    let _system_health_id = event_system.on_system_event(|event: SystemEventData| {
-        match event.event_type {
-            tell_me_when::SystemEventType::CpuUsageHigh => {
-                println!("⚠️  System performance warning: High CPU usage");
-            }
-            tell_me_when::SystemEventType::MemoryUsageHigh => {
-                println!("⚠️  System performance warning: High memory usage");
-            }
-            tell_me_when::SystemEventType::DiskSpaceLow => {
-                println!("⚠️  Storage warning: Low disk space");
-            }
-            tell_me_when::SystemEventType::TemperatureHigh => {
-                println!("🌡️  Hardware warning: High temperature");
-            }
-            _ => {}
-        }
-    }).await?;
+    // let _system_health_id = event_system.on_system_event(|event: SystemEventData| {
+    //     match event.event_type {
+    //         tell_me_when::SystemEventType::CpuUsageHigh => {
+    //             println!("⚠️  System performance warning: High CPU usage");
+    //         }
+    //         tell_me_when::SystemEventType::MemoryUsageHigh => {
+    //             println!("⚠️  System performance warning: High memory usage");
+    //         }
+    //         tell_me_when::SystemEventType::DiskSpaceLow => {
+    //             println!("⚠️  Storage warning: Low disk space");
+    //         }
+    //         tell_me_when::SystemEventType::TemperatureHigh => {
+    //             println!("🌡️  Hardware warning: High temperature");
+    //         }
+    //         _ => {}
+    //     }
+    // }).await?;
 
     Ok(())
 }

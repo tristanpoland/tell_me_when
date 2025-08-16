@@ -92,42 +92,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }).await?;
     
     // Add network monitoring
-    let _network_id = event_system.on_network_event(|event: NetworkEventData| {
-        let (event_icon, color_fn): (&str, fn(&str) -> ColoredString) = match event.event_type {
-            NetworkEventType::InterfaceUp => ("📶", |s| s.bright_green()),
-            NetworkEventType::InterfaceDown => ("📵", |s| s.bright_red()),
-            NetworkEventType::ConnectionEstablished => ("🔗", |s| s.bright_cyan()),
-            NetworkEventType::ConnectionLost => ("🔗", |s| s.red()),
-            NetworkEventType::TrafficThresholdReached => ("📊", |s| s.bright_yellow()),
-        };
-        
-        let interface = event.interface_name.as_deref().unwrap_or("unknown");
-        let output = format!("{} [NETWORK] {} - {:?}", 
-            event_icon, 
-            interface,
-            event.event_type
-        );
-        
-        println!("{}", color_fn(&output));
-    }).await?;
+    // let _network_id = event_system.on_network_event(|event: NetworkEventData| {
+    //     let (event_icon, color_fn): (&str, fn(&str) -> ColoredString) = match event.event_type {
+    //         NetworkEventType::InterfaceUp => ("📶", |s| s.bright_green()),
+    //         NetworkEventType::InterfaceDown => ("📵", |s| s.bright_red()),
+    //         NetworkEventType::ConnectionEstablished => ("🔗", |s| s.bright_cyan()),
+    //         NetworkEventType::ConnectionLost => ("🔗", |s| s.red()),
+    //         NetworkEventType::TrafficThresholdReached => ("📊", |s| s.bright_yellow()),
+    //     };
+    //     
+    //     let interface = event.interface_name.as_deref().unwrap_or("unknown");
+    //     let output = format!("{} [NETWORK] {} - {:?}", 
+    //         event_icon, 
+    //         interface,
+    //         event.event_type
+    //     );
+    //     
+    //     println!("{}", color_fn(&output));
+    // }).await?;
     
     // Add system monitoring
-    let _system_id = event_system.on_system_event(|event: SystemEventData| {
-        let (event_icon, color_fn): (&str, fn(&str) -> ColoredString) = match event.event_type {
-            SystemEventType::CpuUsageHigh => ("🔥", |s| s.red()),
-            SystemEventType::MemoryUsageHigh => ("💾", |s| s.yellow()),
-            SystemEventType::DiskSpaceLow => ("💽", |s| s.bright_red()),
-            SystemEventType::TemperatureHigh => ("🌡️", |s| s.red()),
-            SystemEventType::LoadAverageHigh => ("⚡", |s| s.bright_yellow()),
-        };
-        
-        let output = format!("{} [SYSTEM] {:?}", 
-            event_icon, 
-            event.event_type
-        );
-        
-        println!("{}", color_fn(&output));
-    }).await?;
+    // let _system_id = event_system.on_system_event(|event: SystemEventData| {
+    //     let (event_icon, color_fn): (&str, fn(&str) -> ColoredString) = match event.event_type {
+    //         SystemEventType::CpuUsageHigh => ("🔥", |s| s.red()),
+    //         SystemEventType::MemoryUsageHigh => ("💾", |s| s.yellow()),
+    //         SystemEventType::DiskSpaceLow => ("💽", |s| s.bright_red()),
+    //         SystemEventType::TemperatureHigh => ("🌡️", |s| s.red()),
+    //         SystemEventType::LoadAverageHigh => ("⚡", |s| s.bright_yellow()),
+    //     };
+    //     
+    //     let output = format!("{} [SYSTEM] {:?}", 
+    //         event_icon, 
+    //         event.event_type
+    //     );
+    //     
+    //     println!("{}", color_fn(&output));
+    // }).await?;
     
     // Add power monitoring
     let _power_id = event_system.on_power_event(|event: PowerEventData| {

@@ -203,21 +203,3 @@ fn extract_string_from_variant(variant: &wmi::Variant) -> Result<String> {
         _ => Err(TellMeWhenError::System("Invalid variant type for process name".to_string())),
     }
 }
-
-fn monitor_resource_thresholds(
-    config: ProcessConfig,
-    system: Arc<Mutex<System>>,
-    previous_processes: Arc<Mutex<HashMap<u32, ProcessSnapshot>>>,
-    sender: Sender<EventMessage>,
-    handler_id: HandlerId,
-    is_running: Arc<Mutex<bool>>,
-) {
-    log::info!("Starting resource threshold monitoring (minimal polling for thresholds only)");
-    
-    // This is the only part that uses minimal polling - just for resource thresholds
-    // Process creation/termination use pure WMI event callbacks above
-    // Polling code removed. This function is now a stub to avoid build errors.
-    // If you want event-based resource monitoring, use platform-specific APIs or hooks.
-    // ...existing code...
-    ()
-}

@@ -57,6 +57,8 @@ fn monitor_interface_changes_via_iphelper(
 ) -> Result<()> {
     use windows::Win32::NetworkManagement::IpHelper::{NotifyIpInterfaceChange, MIB_IPINTERFACE_ROW};
     use windows::Win32::Foundation::{HANDLE, BOOL};
+        use winapi::shared::ws2def::AF_UNSPEC;
+        use winapi::shared::minwindef::BOOL;
     use std::ptr;
     
     log::info!("Starting Windows network interface monitoring via IP Helper API (event-driven)");
@@ -84,9 +86,9 @@ fn monitor_interface_changes_via_iphelper(
     // Note: This is a simplified version - real implementation would need proper callback context
     match unsafe {
         NotifyIpInterfaceChange(
-            windows::Win32::NetworkManagement::IpHelper::AF_UNSPEC as u16,
+                AF_UNSPEC as u16,
             Some(interface_change_callback),
-            ptr::null(),
+                Some(ptr::null()),
             BOOL(0), // fInitialNotification
             &mut notification_handle,
         )

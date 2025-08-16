@@ -11,8 +11,8 @@ pub struct EventSystem {
     event_bus: Arc<EventBus>,
     fs_handler: Option<FileSystemHandler>,
     process_handler: Option<ProcessHandler>,
-    system_handler: Option<SystemHandler>,
-    network_handler: Option<NetworkHandler>,
+    // system_handler: Option<SystemHandler>,
+    // network_handler: Option<NetworkHandler>,
     power_handler: Option<PowerHandler>,
     is_running: bool,
 }
@@ -25,8 +25,8 @@ impl EventSystem {
             event_bus,
             fs_handler: None,
             process_handler: None,
-            system_handler: None,
-            network_handler: None,
+            // system_handler: None,
+            // network_handler: None,
             power_handler: None,
             is_running: false,
         }
@@ -56,12 +56,12 @@ impl EventSystem {
         if let Some(ref mut handler) = self.process_handler {
             handler.stop().await?;
         }
-        if let Some(ref mut handler) = self.system_handler {
-            handler.stop().await?;
-        }
-        if let Some(ref mut handler) = self.network_handler {
-            handler.stop().await?;
-        }
+        // if let Some(ref mut handler) = self.system_handler {
+        //     handler.stop().await?;
+        // }
+        // if let Some(ref mut handler) = self.network_handler {
+        //     handler.stop().await?;
+        // }
         if let Some(ref mut handler) = self.power_handler {
             handler.stop().await?;
         }
@@ -186,78 +186,78 @@ impl EventSystem {
     }
 
     // System event methods
-    pub async fn on_system_event<F>(&mut self, callback: F) -> Result<EventId>
-    where
-        F: Fn(SystemEventData) + Send + Sync + 'static,
-    {
-        self.ensure_system_handler().await?;
+    //pub async fn on_system_event<F>(&mut self, callback: F) -> Result<EventId>
+    //where
+    //    F: Fn(SystemEventData) + Send + Sync + 'static,
+    //{
+    //    self.ensure_system_handler().await?;
+    //
+    //    let event_id = self.event_bus.subscribe(move |message| {
+    //        if let EventData::System(system_data) = message.data {
+    //            callback(system_data);
+    //        }
+    //    }).await;
+    //
+    //    Ok(event_id)
+    //}
 
-        let event_id = self.event_bus.subscribe(move |message| {
-            if let EventData::System(system_data) = message.data {
-                callback(system_data);
-            }
-        }).await;
+    //pub async fn on_cpu_usage_high<F>(&mut self, threshold: f32, callback: F) -> Result<EventId>
+    //where
+    //    F: Fn(SystemEventData) + Send + Sync + 'static,
+    //{
+    //    self.ensure_system_handler().await?;
+    //
+    //    let event_id = self.event_bus.subscribe(move |message| {
+    //        if let EventData::System(system_data) = message.data {
+    //            if system_data.event_type == SystemEventType::CpuUsageHigh {
+    //                if let Some(cpu_usage) = system_data.cpu_usage {
+    //                    if cpu_usage >= threshold {
+    //                        callback(system_data);
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }).await;
+    //
+    //    Ok(event_id)
+    //}
 
-        Ok(event_id)
-    }
-
-    pub async fn on_cpu_usage_high<F>(&mut self, threshold: f32, callback: F) -> Result<EventId>
-    where
-        F: Fn(SystemEventData) + Send + Sync + 'static,
-    {
-        self.ensure_system_handler().await?;
-
-        let event_id = self.event_bus.subscribe(move |message| {
-            if let EventData::System(system_data) = message.data {
-                if system_data.event_type == SystemEventType::CpuUsageHigh {
-                    if let Some(cpu_usage) = system_data.cpu_usage {
-                        if cpu_usage >= threshold {
-                            callback(system_data);
-                        }
-                    }
-                }
-            }
-        }).await;
-
-        Ok(event_id)
-    }
-
-    pub async fn on_memory_usage_high<F>(&mut self, threshold: f32, callback: F) -> Result<EventId>
-    where
-        F: Fn(SystemEventData) + Send + Sync + 'static,
-    {
-        self.ensure_system_handler().await?;
-
-        let event_id = self.event_bus.subscribe(move |message| {
-            if let EventData::System(system_data) = message.data {
-                if system_data.event_type == SystemEventType::MemoryUsageHigh {
-                    if let Some(memory_usage) = system_data.memory_usage {
-                        if memory_usage >= threshold {
-                            callback(system_data);
-                        }
-                    }
-                }
-            }
-        }).await;
-
-        Ok(event_id)
-    }
+    //pub async fn on_memory_usage_high<F>(&mut self, threshold: f32, callback: F) -> Result<EventId>
+    //where
+    //    F: Fn(SystemEventData) + Send + Sync + 'static,
+    //{
+    //    self.ensure_system_handler().await?;
+    //
+    //    let event_id = self.event_bus.subscribe(move |message| {
+    //        if let EventData::System(system_data) = message.data {
+    //            if system_data.event_type == SystemEventType::MemoryUsageHigh {
+    //                if let Some(memory_usage) = system_data.memory_usage {
+    //                    if memory_usage >= threshold {
+    //                        callback(system_data);
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }).await;
+    //
+    //    Ok(event_id)
+    //}
 
     // Network event methods
-    pub async fn on_network_event<F>(&mut self, callback: F) -> Result<EventId>
-    where
-        F: Fn(NetworkEventData) + Send + Sync + 'static,
-    {
-        self.ensure_network_handler().await?;
-
-        let event_id = self.event_bus.subscribe(move |message| {
-            if let EventData::Network(network_data) = message.data {
-                callback(network_data);
-            }
-        }).await;
-
-        Ok(event_id)
-    }
+    //pub async fn on_network_event<F>(&mut self, callback: F) -> Result<EventId>
+    //where
+    //    F: Fn(NetworkEventData) + Send + Sync + 'static,
+    //{
+    //    self.ensure_network_handler().await?;
+    //
+    //    let event_id = self.event_bus.subscribe(move |message| {
+    //        if let EventData::Network(network_data) = message.data {
+    //            callback(network_data);
+    //        }
+    //    }).await;
+    //
+    //    Ok(event_id)
+    //}
 
     // Power event methods
     pub async fn on_power_event<F>(&mut self, callback: F) -> Result<EventId>
@@ -326,24 +326,24 @@ impl EventSystem {
         Ok(())
     }
 
-    async fn ensure_system_handler(&mut self) -> Result<()> {
-        if self.system_handler.is_none() {
-            let mut handler = SystemHandler::new("system".to_string());
-            handler.event_sender = Some(self.event_bus.sender());
-                handler.start(crate::handlers::system::SystemConfig::default()).await?;
-            self.system_handler = Some(handler);
-        }
-        Ok(())
-    }
+    // async fn ensure_system_handler(&mut self) -> Result<()> {
+    //     if self.system_handler.is_none() {
+    //         let mut handler = SystemHandler::new("system".to_string());
+    //         handler.event_sender = Some(self.event_bus.sender());
+    //             handler.start(crate::handlers::system::SystemConfig::default()).await?;
+    //         self.system_handler = Some(handler);
+    //     }
+    //     Ok(())
+    // }
 
-    async fn ensure_network_handler(&mut self) -> Result<()> {
-        if self.network_handler.is_none() {
-            let mut handler = NetworkHandler::new(crate::handlers::network::NetworkConfig::default());
-            handler.start(self.event_bus.sender(), "network".to_string()).await?;
-            self.network_handler = Some(handler);
-        }
-        Ok(())
-    }
+    // async fn ensure_network_handler(&mut self) -> Result<()> {
+    //     if self.network_handler.is_none() {
+    //         let mut handler = NetworkHandler::new(crate::handlers::network::NetworkConfig::default());
+    //         handler.start(self.event_bus.sender(), "network".to_string()).await?;
+    //         self.network_handler = Some(handler);
+    //     }
+    //     Ok(())
+    // }
 
     async fn ensure_power_handler(&mut self) -> Result<()> {
         if self.power_handler.is_none() {
