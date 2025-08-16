@@ -10,38 +10,41 @@ keywords = ["events", "filesystem", "watcher", "cross-platform", "callbacks"]
 categories = ["filesystem", "os"]
 
 [dependencies]
-tokio = { version = "1.0", features = ["full"] }
-crossbeam-channel = "0.5"
-sysinfo = "0.30"
-log = "0.4"
-async-trait = "0.1"
-futures = "0.3"
-thiserror = "1.0"
-regex = "1.10"
-env_logger = "0.11"
-colored = "2.0"
-uuid = { version = "1.10", features = ["v4"] }
+tokio = { version = "1.47.1", features = ["full"] }
+crossbeam-channel = "0.5.15"
+sysinfo = "0.37.0"
+log = "0.4.27"
+async-trait = "0.1.89"
+futures = "0.3.31"
+thiserror = "2.0.14"
+regex = "1.11.1"
+env_logger = "0.11.8"
+colored = "3.0.0"
+uuid = { version = "1.18.0", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winnt", "fileapi", "handleapi", "synchapi", "winbase", "winerror", "errhandlingapi", "ioapiset", "tlhelp32", "processthreadsapi"] }
-wmi = "0.13"
+winapi = { version = "0.3.9", features = ["winnt", "fileapi", "handleapi", "synchapi", "winbase", "winerror", "errhandlingapi", "ioapiset", "tlhelp32", "processthreadsapi", "iphlpapi"] }
+wmi = "0.17.2"
+windows = { version = "0.61.3", features = ["Win32_NetworkManagement_IpHelper", "Win32_Foundation"] }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
-inotify = "0.10"
-netlink-sys = "0.8"
-rtnetlink = "0.13"
+libc = "0.2.175"
+inotify = "0.11.0"
+netlink-sys = "0.8.7"
+rtnetlink = "0.17.0"
+nix = "0.30.1"
+cnproc = "0.2.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-foundation = "0.9"
-core-foundation-sys = "0.8"
+core-foundation = "0.10.1"
+core-foundation-sys = "0.8.7"
 
 [dev-dependencies]
-tempfile = "3.8"
-tokio-test = "0.4"
-env_logger = "0.11"
-num_cpus = "1.16"
-reqwest = { version = "0.11", features = ["json"] }
+tempfile = "3.20.0"
+tokio-test = "0.4.4"
+env_logger = "0.11.8"
+num_cpus = "1.17.0"
+reqwest = { version = "0.12.23", features = ["json"] }
 
 [[example]]
 name = "basic_usage"
