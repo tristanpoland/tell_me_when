@@ -125,7 +125,7 @@ fn monitor_process_creation(
                             
                             ProcessHandler::emit_process_event(
                                 ProcessEventType::Started,
-                                *pid,
+                                pid,
                                 name.clone(),
                                 None,
                                 None,
@@ -177,7 +177,7 @@ fn monitor_process_termination(
                             
                             ProcessHandler::emit_process_event(
                                 ProcessEventType::Terminated,
-                                *pid,
+                                pid,
                                 name.clone(),
                                 None,
                                 None,
