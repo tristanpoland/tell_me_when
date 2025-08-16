@@ -20,6 +20,7 @@ thiserror = "1.0"
 regex = "1.10"
 env_logger = "0.11"
 colored = "2.0"
+uuid = { version = "1.10", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winnt", "fileapi", "handleapi", "synchapi", "winbase", "winerror", "errhandlingapi", "ioapiset", "tlhelp32", "processthreadsapi"] }
