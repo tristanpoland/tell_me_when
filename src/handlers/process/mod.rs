@@ -1,6 +1,6 @@
 use crate::events::{EventData, ProcessEventData, ProcessEventType};
-use crate::traits::{EventHandler, EventHandlerConfig, ThresholdConfig, IntervalConfig};
-use crate::{EventMessage, EventMetadata, HandlerId, Result, TellMeWhenError};
+use crate::traits::{EventHandlerConfig, ThresholdConfig, IntervalConfig};
+use crate::{EventMessage, EventMetadata, HandlerId, Result, TellMeWhenError, EventId};
 use crossbeam_channel::Sender;
 use sysinfo::{System, Pid, Process};
 use std::collections::HashMap;
@@ -139,11 +139,12 @@ impl ProcessHandler {
         };
 
         let event_message = EventMessage {
-            event_data: EventData::Process(event_data),
+            data: EventData::Process(event_data),
             metadata: EventMetadata {
+                id: uuid::Uuid::new_v4().as_u128() as EventId,
                 handler_id: handler_id.clone(),
-                event_id: uuid::Uuid::new_v4().to_string(),
                 timestamp: SystemTime::now(),
+                source: "ProcessHandler".to_string(),
             },
         };
 
