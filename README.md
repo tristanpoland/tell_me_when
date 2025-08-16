@@ -2,6 +2,9 @@
 
 A Rust library for cross-platform event monitoring and callback-based notifications. Monitor file system changes, process events, system resource usage, network changes, and power events with simple, intuitive APIs.
 
+> [!CAUTION]
+> This library is not fully stable or tested on all platforms. Use with caution and file an issue if you find bugs!
+
 [![Crates.io](https://img.shields.io/crates/v/tell_me_when.svg)](https://crates.io/crates/tell_me_when)
 [![Documentation](https://docs.rs/tell_me_when/badge.svg)](https://docs.rs/tell_me_when)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -364,9 +367,3 @@ The library is designed to be easily extensible. To add new event types:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built with Rust's powerful type system and async/await
-- Inspired by various file watching and system monitoring libraries
-- Cross-platform compatibility through careful API abstraction
