@@ -32,7 +32,7 @@ pub async fn start_process_monitoring(
         if let Err(e) = start_wmi_process_monitoring(&config, &system, &previous_processes, &is_running, sender, handler_id) {
             log::error!("WMI process monitoring failed: {}", e);
         }
-    }).await.map_err(|e| TellMeWhenError::RuntimeError(format!("Process monitoring task failed: {}", e)))?;
+    }).await.map_err(|e| TellMeWhenError::System(format!("Process monitoring task failed: {}", e)))?;
 
     Ok(())
 }
