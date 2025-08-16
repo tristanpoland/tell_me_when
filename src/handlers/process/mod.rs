@@ -183,7 +183,7 @@ impl EventHandler for ProcessHandler {
             self.config = *process_config;
             Ok(())
         } else {
-            Err(TellMeWhenError::ConfigError("Invalid config type for ProcessHandler".to_string()))
+            Err(TellMeWhenError::Config("Invalid config type for ProcessHandler".to_string()))
         }
     }
 }
