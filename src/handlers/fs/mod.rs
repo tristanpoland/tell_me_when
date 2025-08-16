@@ -1,12 +1,12 @@
 use crate::events::{EventData, FsEventData, FsEventType};
 use crate::traits::{EventHandler, EventHandlerConfig};
-use crate::{EventBus, EventMessage, EventMetadata, HandlerId, Result, TellMeWhenError};
+use crate::{EventMessage, EventMetadata, HandlerId, Result, TellMeWhenError};
 use crossbeam_channel::Sender;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
-use tokio::time::interval;
+use std::time::SystemTime;
+// use tokio::time::interval;
 
 #[cfg(windows)]
 mod windows;
@@ -58,7 +58,7 @@ pub struct FileSystemHandler {
     pub event_sender: Option<Sender<EventMessage>>,
     is_running: bool,
     handler_id: HandlerId,
-    platform_watcher: Option<PlatformWatcher>,
+    platform_watcher: Option<WindowsFsWatcher>,
 }
 
 unsafe impl Send for FileSystemHandler {}
@@ -98,9 +98,12 @@ impl FileSystemHandler {
         }
 
         if let Some(watcher) = &mut self.platform_watcher {
-            let handle = watcher.watch_path(&path, &self.config).await?;
-            let mut watched_paths = self.watched_paths.lock().unwrap();
-            watched_paths.insert(path, handle);
+            // For now, just store the HANDLE from WindowsFsWatcher
+            let handle = watcher.watch_req.as_ref().map(|req| req.handle);
+            if let Some(h) = handle {
+                let mut watched_paths = self.watched_paths.lock().unwrap();
+                watched_paths.insert(path, WatchHandle { handle: h });
+            }
         }
 
         Ok(())
@@ -115,7 +118,12 @@ impl FileSystemHandler {
         
         if let Some(handle) = handle {
             if let Some(watcher) = &mut self.platform_watcher {
-                watcher.unwatch(handle).await?;
+                // For now, just close the handle
+                #[cfg(windows)]
+                unsafe {
+                    use winapi::um::handleapi::CloseHandle;
+                    CloseHandle(handle.handle);
+                }
             }
         }
 
@@ -175,10 +183,13 @@ impl EventHandler for FileSystemHandler {
         }
 
         self.config = config;
-        self.platform_watcher = Some(PlatformWatcher::new(
-            self.handler_id.clone(),
-            self.event_sender.clone()
-        )?);
+        #[cfg(windows)]
+        {
+            // Create a WindowsFsWatcher for a dummy path (should be improved)
+            let dummy_path = std::path::Path::new("C:\\");
+            let watcher = WindowsFsWatcher::new(dummy_path, true, |_| {});
+            self.platform_watcher = watcher;
+        }
         self.is_running = true;
 
         log::info!("FileSystem handler started with id: {}", self.handler_id);
@@ -222,7 +233,7 @@ impl EventHandler for FileSystemHandler {
 #[derive(Debug)]
 pub struct WatchHandle {
     #[cfg(windows)]
-    pub(crate) handle: windows::WindowsWatchHandle,
+    pub(crate) handle: winapi::um::winnt::HANDLE,
     #[cfg(all(unix, not(target_os = "macos")))]
     pub(crate) handle: unix::UnixWatchHandle,
     #[cfg(target_os = "macos")]

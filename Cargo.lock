@@ -1669,6 +1669,7 @@ dependencies = [
  "uuid",
  "winapi",
  "windows",
+ "windows-sys 0.60.2",
  "wmi",
 ]
 
