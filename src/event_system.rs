@@ -310,7 +310,7 @@ impl EventSystem {
         if self.fs_handler.is_none() {
             let mut handler = FileSystemHandler::new("filesystem".to_string());
             handler.event_sender = Some(self.event_bus.sender());
-            handler.start(Default::default()).await?;
+                handler.start(crate::handlers::fs::FsWatchConfig::default()).await?;
             self.fs_handler = Some(handler);
         }
         Ok(())
@@ -330,7 +330,7 @@ impl EventSystem {
         if self.system_handler.is_none() {
             let mut handler = SystemHandler::new("system".to_string());
             handler.event_sender = Some(self.event_bus.sender());
-            handler.start(Default::default()).await?;
+                handler.start(crate::handlers::system::SystemConfig::default()).await?;
             self.system_handler = Some(handler);
         }
         Ok(())
@@ -340,7 +340,7 @@ impl EventSystem {
         if self.network_handler.is_none() {
             let mut handler = NetworkHandler::new("network".to_string());
             handler.event_sender = Some(self.event_bus.sender());
-            handler.start(Default::default()).await?;
+                handler.start(crate::handlers::network::NetworkConfig::default()).await?;
             self.network_handler = Some(handler);
         }
         Ok(())
@@ -350,7 +350,7 @@ impl EventSystem {
         if self.power_handler.is_none() {
             let mut handler = PowerHandler::new("power".to_string());
             handler.event_sender = Some(self.event_bus.sender());
-            handler.start(Default::default()).await?;
+                handler.start(crate::handlers::power::PowerConfig::default()).await?;
             self.power_handler = Some(handler);
         }
         Ok(())

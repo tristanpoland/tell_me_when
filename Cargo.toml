@@ -12,7 +12,7 @@ categories = ["filesystem", "os"]
 [dependencies]
 tokio = { version = "1.47.1", features = ["full"] }
 crossbeam-channel = "0.5.15"
-sysinfo = "0.37.0"
+sysinfo = "0.36.1"
 log = "0.4.27"
 async-trait = "0.1.89"
 futures = "0.3.31"
