@@ -338,9 +338,8 @@ impl EventSystem {
 
     async fn ensure_network_handler(&mut self) -> Result<()> {
         if self.network_handler.is_none() {
-            let mut handler = NetworkHandler::new("network".to_string());
-            handler.event_sender = Some(self.event_bus.sender());
-                handler.start(crate::handlers::network::NetworkConfig::default()).await?;
+            let mut handler = NetworkHandler::new(crate::handlers::network::NetworkConfig::default());
+            handler.start(self.event_bus.sender(), "network".to_string()).await?;
             self.network_handler = Some(handler);
         }
         Ok(())

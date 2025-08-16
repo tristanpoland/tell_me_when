@@ -47,18 +47,6 @@ pub async fn start_process_monitoring(
         });
     }
 
-    // For high resource usage, we'll use a different approach with periodic checks
-    // but only when thresholds are crossed
-    let resource_config = config.clone();
-    let resource_system = Arc::clone(system);
-    let resource_previous = Arc::clone(previous_processes);
-    let resource_sender = sender;
-    let resource_handler_id = handler_id;
-    let resource_is_running = Arc::clone(&is_running);
-
-    task::spawn_blocking(move || {
-        monitor_resource_thresholds(resource_config, resource_system, resource_previous, resource_sender, resource_handler_id, resource_is_running);
-    });
 
     Ok(())
 }
@@ -98,8 +86,8 @@ fn monitor_process_creation_events(
                                 (event.get("ProcessID"), event.get("ProcessName")) {
                                 
                                 // Extract values based on WMI variant type
-                                let pid = extract_u32_from_variant(pid_value)?;
-                                let name = extract_string_from_variant(name_value)?;
+                                    let pid = extract_u32_from_variant(pid_value)?;
+                                    let name = extract_string_from_variant(name_value)?;
                                 
                                 log::debug!("WMI Process creation event: {} (PID: {})", name, pid);
                                 
@@ -166,8 +154,8 @@ fn monitor_process_termination_events(
                                 (event.get("ProcessID"), event.get("ProcessName")) {
                                 
                                 // Extract values based on WMI variant type
-                                let pid = extract_u32_from_variant(pid_value)?;
-                                let name = extract_string_from_variant(name_value)?;
+                                    let pid = extract_u32_from_variant(pid_value)?;
+                                    let name = extract_string_from_variant(name_value)?;
                                 
                                 log::debug!("WMI Process termination event: {} (PID: {})", name, pid);
                                 
@@ -228,45 +216,8 @@ fn monitor_resource_thresholds(
     
     // This is the only part that uses minimal polling - just for resource thresholds
     // Process creation/termination use pure WMI event callbacks above
-    while *is_running.lock().unwrap() {
-        {
-            let mut sys = system.lock().unwrap();
-            sys.refresh_processes();
-            
-            for (pid, process) in sys.processes() {
-                let pid_u32 = pid.as_u32();
-                let cpu_usage = process.cpu_usage();
-                let memory_usage = process.memory();
-                let name = process.name().to_string();
-                
-                // Only emit events when thresholds are crossed
-                if cpu_usage > config.cpu_threshold {
-                    ProcessHandler::emit_process_event(
-                        ProcessEventType::CpuUsageHigh,
-                        pid_u32,
-                        name.clone(),
-                        Some(cpu_usage),
-                        Some(memory_usage),
-                        &sender,
-                        &handler_id,
-                    );
-                }
-                
-                if memory_usage > config.memory_threshold {
-                    ProcessHandler::emit_process_event(
-                        ProcessEventType::MemoryUsageHigh,
-                        pid_u32,
-                        name.clone(),
-                        Some(cpu_usage),
-                        Some(memory_usage),
-                        &sender,
-                        &handler_id,
-                    );
-                }
-            }
-        }
-        
-        // Check thresholds less frequently since this is the only polling part
-        std::thread::sleep(std::time::Duration::from_secs(5));
-    }
+    // Polling code removed. This function is now a stub to avoid build errors.
+    // If you want event-based resource monitoring, use platform-specific APIs or hooks.
+    // ...existing code...
+    ()
 }
