@@ -97,7 +97,7 @@ fn start_wmi_process_monitoring(
 }
 
 fn monitor_process_creation(
-    wmi_con: &WMIConnection,
+    wmi_con: &wmi::WMIConnection,
     sender: Sender<EventMessage>,
     handler_id: HandlerId,
     is_running: Arc<Mutex<bool>>,
@@ -149,7 +149,7 @@ fn monitor_process_creation(
 }
 
 fn monitor_process_termination(
-    wmi_con: &WMIConnection,
+    wmi_con: &wmi::WMIConnection,
     sender: Sender<EventMessage>,
     handler_id: HandlerId,
     is_running: Arc<Mutex<bool>>,
